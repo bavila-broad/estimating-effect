@@ -73,6 +73,38 @@ estimatePRS<-function(genotype){
 individualPRSEstimates = apply(individualGenotypes, 2, estimatePRS)
 
 
+# in analysis, we can use \beta_{m+1} through \beta_n as seperate attempts 
+# since we only estimate one at a time
 
+
+# First attempt: measure beta by finding disease prevalence in those with and without
+# no information needed other than phenotypes and G_{m+1}
+
+# initialize our estimate vector
+unknownEstimatesA = rep(NaN, numVariants - numKnownVariants)
+
+# how to estimate a beta
+estimateA<-function(locus){
+  # select indices for each number of alleles
+  gZero = which(individualGenotypes[locus,] == 0)
+  gOne = which(individualGenotypes[locus,] == 1)
+  gTwo = which(individualGenotypes[locus,] == 2)
+  
+  # find disease prevalence in these groups
+  zeroAllelePrevalence = sum(individualPhenotypes[gZero]) / length(gZero)
+  oneAllelePrevalence = sum(individualPhenotypes[gOne]) / length(gOne)
+  twoAllelePrevalence = sum(individualPhenotypes[gTwo]) / length(gTwo)
+  
+  # use prevalence to estimate beta
+  # just use prevalence for 0 and 1 alleles. too few have 2 normally.
+  psi(oneAllelePrevalence) - psi(zeroAllelePrevalence)
+  
+}
+
+# estimate for each unknown beta
+for(i in (numKnownVariants + 1):numVariants){
+  unknownEstimatesA[i - numKnownVariants] = estimateA(i)
+  
+}
 
 
