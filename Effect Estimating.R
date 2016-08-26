@@ -72,10 +72,13 @@ estimatePRS<-function(genotype){
 # estimate everyone's PRS
 individualPRSEstimates = apply(individualGenotypes, 2, estimatePRS)
 
+# *************** Analysis ***************
 
 # in analysis, we can use \beta_{m+1} through \beta_n as seperate attempts 
 # since we only estimate one at a time
 
+
+# *************** Method A ***************
 
 # First attempt: measure beta by finding disease prevalence in those with and without
 # no information needed other than phenotypes and G_{m+1}
@@ -85,6 +88,7 @@ unknownEstimatesA = rep(NaN, numVariants - numKnownVariants)
 
 # how to estimate a beta
 estimateA<-function(locus){
+  
   # select indices for each number of alleles
   gZero = which(individualGenotypes[locus,] == 0)
   gOne = which(individualGenotypes[locus,] == 1)
@@ -106,5 +110,41 @@ for(i in (numKnownVariants + 1):numVariants){
   unknownEstimatesA[i - numKnownVariants] = estimateA(i)
   
 }
+
+
+# *************** Method B ***************
+
+# select individuals without the disease and compare estimated PRS means
+# in those with 1 allele and with 0
+
+# initialize our estimate vector
+unknownEstimatesB = rep(NaN, numVariants - numKnownVariants)
+
+
+# how to estimate a beta
+estimateB<-function(locus){
+  
+  # select out healthy inds
+  healthy = which(individualPhenotypes == 0)
+  
+  # select those with 1 and 0 alleles, as those with 2 are too few
+  gZero = which(individualGenotypes[locus, healthy] == 0)
+  gOne = which(individualGenotypes[locus, healthy] == 1)
+  
+  # find PRS estimate means on populations
+  PRSZero = mean(individualPRSEstimates[gZero])
+  PRSOne = mean(individualPRSEstimates[gOne])
+  
+  # difference should be beta
+  PRSOne - PRSZero
+  
+}
+
+# estimate for each unknown beta
+for(i in (numKnownVariants + 1):numVariants){
+  unknownEstimatesB[i - numKnownVariants] = estimateB(i)
+  
+}
+
 
 
