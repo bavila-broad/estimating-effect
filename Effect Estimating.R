@@ -29,6 +29,7 @@ variantFractions = rbeta(numVariants, 1, 99)
 # variant betas
 variantBetaVariances = rep(heritability / numVariants, numVariants)
 variantBetas = sqrt(variantBetaVariances / (2 * variantFractions * (1 - variantFractions)))
+variantBetas = variantBetas * sample(c(-1, 1), size = numVariants, replace = TRUE, prob = c(0.5, 0.5))
 
 # how to generate a genotype
 generateGenotype<-function(){
