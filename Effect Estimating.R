@@ -147,4 +147,39 @@ for(i in (numKnownVariants + 1):numVariants){
 }
 
 
+# *************** Method C ***************
+
+# select individuals with the disease and compare estimated PRS means
+# in those with 1 allele and with 0
+# same as B except choosing those with
+
+# initialize our estimate vector
+unknownEstimatesC = rep(NaN, numVariants - numKnownVariants)
+
+
+# how to estimate a beta
+estimateC<-function(locus){
+  
+  # select out healthy inds
+  healthy = which(individualPhenotypes == 1)
+  
+  # select those with 1 and 0 alleles, as those with 2 are too few
+  gZero = which(individualGenotypes[locus, healthy] == 0)
+  gOne = which(individualGenotypes[locus, healthy] == 1)
+  
+  # find PRS estimate means on populations
+  PRSZero = mean(individualPRSEstimates[gZero])
+  PRSOne = mean(individualPRSEstimates[gOne])
+  
+  # difference should be beta
+  PRSOne - PRSZero
+  
+}
+
+# estimate for each unknown beta
+for(i in (numKnownVariants + 1):numVariants){
+  unknownEstimatesC[i - numKnownVariants] = estimateC(i)
+  
+}
+
 
