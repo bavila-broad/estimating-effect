@@ -175,16 +175,8 @@ estimateB<-function(locus){
   # select out healthy inds
   healthy<<-which(individualPhenotypes == 0)
   
-  # select those with 1 and 0 alleles, as those with 2 are too few
-  gZero = which(individualGenotypes[locus, healthy] == 0)
-  gOne = which(individualGenotypes[locus, healthy] == 1)
-  PRSz = (individualPRSEstimates - mean(individualPRSEstimates))/sd(individualPRSEstimates)
-  # find PRS estimate means on populations
-  PRSZero = mean(PRSz[gZero])
-  PRSOne = mean(PRSz[gOne])
-  
   # difference should be beta
- fit <- lm(individualPRSEstimates[healthy] ~ scale(individualGenotypes[locus,healthy]))
+ fit <- lm(individualPRSEstimates[healthy] ~ individualGenotypes[locus,healthy])
   return(list(-summary(fit)$coefficients[2, "Estimate"], variantBetasRare[locus - numVariantsBottom - numVariantsTop], summary(fit)$coefficients[2, "Pr(>|t|)"]))
   #print(PRSZero - PRSOne)
   
@@ -244,4 +236,59 @@ simulateStudy<-function(){
 #   unknownEstimatesC[i - numKnownVariants] = estimateC(i)
 #   
 # }
+
+# *************** Method D ***************
+
+# Take the tails and treat them as cases and controls
+
+estimateD<-function(locus){
+  
+  # select out healthy inds
+  healthy<<-which(individualPhenotypes == 0)
+  
+  # set fraction for tails
+  tailsize = 0.1
+  
+  cutoffs = quantile(individualPRSEstimates[healthy], c(tailsize, 1-tailsize))
+  topPRSPeople = healthy[which(individualPRSEstimates > cutoffs[2])]
+  bottomPRSPeople = healthy[which(individualPRSEstimates < cutoffs[1])]
+  allPeople = c(bottomPRSPeople, topPRSPeople)
+  
+  # select indices for each number of alleles
+  gZero = allPeople[which(individualGenotypes[locus,] == 0)]
+  gOne = allPeople[which(individualGenotypes[locus,] == 1)]
+  gTwo = allPeople[which(individualGenotypes[locus,] == 2)]
+  
+  # find disease prevalence in these groups
+  zeroAllelePrevalence = length(which(gZero %in% topPRSPeople)) / length(gZero)
+  oneAllelePrevalence = length(which(gOne %in% topPRSPeople)) / length(gOne)
+  twoAllelePrevalence = length(which(gOne %in% topPRSPeople)) / length(gTwo)
+  
+  # use prevalence to estimate beta
+  fit<-lm(c(psi(zeroAllelePrevalence), psi(oneAllelePrevalence), psi(twoAllelePrevalence)) ~ c(0, 1, 2))
+  return(list(-summary(fit)$coefficients[2, "Estimate"], variantBetasRare[locus - numVariantsBottom - numVariantsTop], summary(fit)$coefficients[2, "Pr(>|t|)"]))
+  
+}
+
+simulateStudyD<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  estimateC(numVariantsBottom + numVariantsTop + 1)
+  
+  
+}
+
+
+
+
+
 
