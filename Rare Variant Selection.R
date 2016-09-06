@@ -153,12 +153,6 @@ estimateA<-function(locus){
   
 }
 
-# estimate for each unknown beta
-for(i in (numVariantsTop+numVariantsBottom+1):(numVariantsTop+numVariantsBottom+numVariantsRare)){
-  unknownEstimatesA[i-numVariantsTop - numVariantsBottom] = estimateA(i)
-  
-}
-
 
 # *************** Method B ***************
 
@@ -184,7 +178,7 @@ estimateB<-function(locus){
 
 studynumber = 0
 
-simulateStudy<-function(){
+simulateStudyB<-function(){
   studynumber<<-studynumber + 1
   print(cat("Beginning Study ", studynumber))
   print("Assigning betas...")
@@ -247,24 +241,30 @@ estimateD<-function(locus){
   healthy<<-which(individualPhenotypes == 0)
   
   # set fraction for tails
-  tailsize = 0.1
+  tailsize = 0.10
   
   cutoffs = quantile(individualPRSEstimates[healthy], c(tailsize, 1-tailsize))
-  topPRSPeople = healthy[which(individualPRSEstimates > cutoffs[2])]
-  bottomPRSPeople = healthy[which(individualPRSEstimates < cutoffs[1])]
+  topPRSPeople = healthy[individualPRSEstimates[healthy] > cutoffs[2]]
+  bottomPRSPeople = healthy[individualPRSEstimates[healthy] < cutoffs[1]]
   allPeople = c(bottomPRSPeople, topPRSPeople)
   
   # select indices for each number of alleles
-  gZero = allPeople[which(individualGenotypes[locus,] == 0)]
-  gOne = allPeople[which(individualGenotypes[locus,] == 1)]
-  gTwo = allPeople[which(individualGenotypes[locus,] == 2)]
+  gZero = allPeople[individualGenotypes[locus, allPeople] == 0]
+  gOne = allPeople[individualGenotypes[locus, allPeople] == 1]
+  gTwo = allPeople[individualGenotypes[locus, allPeople] == 2]
+  
+  # if we don't have any with gTwo, then we can't really find our beta
+  if(length(gTwo) == 0) return("NH2")
   
   # find disease prevalence in these groups
   zeroAllelePrevalence = length(which(gZero %in% topPRSPeople)) / length(gZero)
   oneAllelePrevalence = length(which(gOne %in% topPRSPeople)) / length(gOne)
-  twoAllelePrevalence = length(which(gOne %in% topPRSPeople)) / length(gTwo)
+  twoAllelePrevalence = length(which(gTwo %in% topPRSPeople)) / length(gTwo)
   
-  # use prevalence to estimate beta
+  # can't use if twoAllelePrevalence == 0 or 1
+  if(twoAllelePrevalence == 0 || twoAllelePrevalence == 1) return("IPI")
+  
+  # use prevalence to estimate beta (if we can)
   fit<-lm(c(psi(zeroAllelePrevalence), psi(oneAllelePrevalence), psi(twoAllelePrevalence)) ~ c(0, 1, 2))
   return(list(-summary(fit)$coefficients[2, "Estimate"], variantBetasRare[locus - numVariantsBottom - numVariantsTop], summary(fit)$coefficients[2, "Pr(>|t|)"]))
   
@@ -282,13 +282,266 @@ simulateStudyD<-function(){
   createIndividuals()
   createPRSEstimates()
   
-  estimateC(numVariantsBottom + numVariantsTop + 1)
+  estimateD(numVariantsBottom + numVariantsTop + 1)
+  
+  
+}
+
+# *************** Method E ***************
+
+# Same as B, but use inner portions
+
+estimateE<-function(locus){
+  
+  # select out healthy inds
+  healthy<<-which(individualPhenotypes == 0)
+  
+  # get genotype sets
+  gZero = healthy[individualGenotypes[locus, healthy] == 0]
+  gOne = healthy[individualGenotypes[locus, healthy] == 1]
+  gTwo = healthy[individualGenotypes[locus, healthy] == 2]
+  
+  # find quantiles for each genotype
+  innerPortion = 0.5
+  quantilesZero = quantile(individualPRSEstimates[gZero], c((1 - innerPortion) / 2, (1 + innerPortion) / 2))
+  quantilesOne = quantile(individualPRSEstimates[gOne], c((1 - innerPortion) / 2, (1 + innerPortion) / 2))
+  quantilesTwo = quantile(individualPRSEstimates[gTwo], c((1 - innerPortion) / 2, (1 + innerPortion) / 2))
+  
+  # find inner portions of PRS spreads for each genotype
+  gZeroInner = gZero[individualPRSEstimates[gZero] > quantilesZero[1]]
+  gZeroInner = gZeroInner[individualPRSEstimates[gZeroInner] < quantilesZero[2]]
+  gOneInner = gOne[individualPRSEstimates[gOne] > quantilesOne[1]]
+  gOneInner = gOneInner[individualPRSEstimates[gOneInner] < quantilesOne[2]]
+  gTwoInner = gTwo[individualPRSEstimates[gTwo] > quantilesTwo[1]]
+  gTwoInner = gTwoInner[individualPRSEstimates[gTwoInner] < quantilesTwo[2]]
+  
+  # assign weights
+  weightZero = 1
+  weightOne = 1 #sqrt(length(gZeroInner) / length(gOneInner))
+  weightTwo = 1 #sqrt(length(gZeroInner) / length(gTwoInner))
+  
+  # fitting
+  relevantPRSs = c(individualPRSEstimates[gZeroInner], individualPRSEstimates[gOneInner], individualPRSEstimates[gTwoInner])
+  relevantGenotypes = c(rep(0, length(gZeroInner)), rep(1, length(gOneInner)), rep(2, length(gTwoInner)))
+  relevantWeights = c(rep(weightZero, length(gZeroInner)), rep(weightOne, length(gOneInner)), rep(weightTwo, length(gTwoInner)))
+  plot(relevantGenotypes, relevantPRSs)
+  fit <- lm(relevantPRSs ~ relevantGenotypes, weights=relevantWeights)
+  return(list(-summary(fit)$coefficients[2, "Estimate"], variantBetasRare[locus - numVariantsBottom - numVariantsTop], summary(fit)$coefficients[2, "Pr(>|t|)"]))
+  
+  
+}
+
+simulateStudyE<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  estimateE(numVariantsBottom + numVariantsTop + 1)
+  
+  
+}
+
+simulateStudyBE<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateB(numVariantsBottom + numVariantsTop + 1)[1]), unlist(estimateE(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+  
+}
+
+simulateStudyBD<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateB(numVariantsBottom + numVariantsTop + 1)[1]), unlist(estimateD(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+  
+}
+
+# *************** Method F ***************
+
+# Same as D but with weights
+
+estimateF<-function(locus){
+  
+  # select out healthy inds
+  healthy<<-which(individualPhenotypes == 0)
+  
+  # set fraction for tails
+  tailsize = 0.10
+  
+  cutoffs = quantile(individualPRSEstimates[healthy], c(tailsize, 1-tailsize))
+  topPRSPeople = healthy[individualPRSEstimates[healthy] > cutoffs[2]]
+  bottomPRSPeople = healthy[individualPRSEstimates[healthy] < cutoffs[1]]
+  allPeople = c(bottomPRSPeople, topPRSPeople)
+  
+  # select indices for each number of alleles
+  gZero = allPeople[individualGenotypes[locus, allPeople] == 0]
+  gOne = allPeople[individualGenotypes[locus, allPeople] == 1]
+  gTwo = allPeople[individualGenotypes[locus, allPeople] == 2]
+  
+  # if we don't have any with gTwo, then we can't really find our beta
+  if(length(gTwo) == 0) return("NH2")
+  
+  # find disease prevalence in these groups
+  zeroAllelePrevalence = length(which(gZero %in% topPRSPeople)) / length(gZero)
+  oneAllelePrevalence = length(which(gOne %in% topPRSPeople)) / length(gOne)
+  twoAllelePrevalence = length(which(gTwo %in% topPRSPeople)) / length(gTwo)
+  
+  # can't use if twoAllelePrevalence == 0 or 1
+  if(twoAllelePrevalence == 0 || twoAllelePrevalence == 1) return("IPI")
+  
+  # attach weights for confidence
+  myWeights = c(length(gZero), length(gOne), length(gTwo))
+  
+  # use prevalence to estimate beta (if we can)
+  fit<-lm(c(psi(zeroAllelePrevalence), psi(oneAllelePrevalence), psi(twoAllelePrevalence)) ~ c(0, 1, 2), weights=myWeights)
+  return(list(-summary(fit)$coefficients[2, "Estimate"], variantBetasRare[locus - numVariantsBottom - numVariantsTop], summary(fit)$coefficients[2, "Pr(>|t|)"]))
+  
+}
+
+simulateStudyDF<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateD(numVariantsBottom + numVariantsTop + 1)[1]), unlist(estimateF(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+  
+}
+
+simulateStudyF<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  estimator = estimateF(numVariantsBottom + numVariantsTop + 1)
+  c(unlist(estimator[1]), unlist(estimator[3]))
   
   
 }
 
 
+simulateStudyAB<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateA(numVariantsBottom + numVariantsTop + 1)), unlist(estimateB(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+  
+}
+
+simulateStudyAF<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateA(numVariantsBottom + numVariantsTop + 1)), unlist(estimateF(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+  
+}
+
+
+simulateStudyBF<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateB(numVariantsBottom + numVariantsTop + 1)), unlist(estimateF(numVariantsBottom + numVariantsTop + 1)))
+  
+  
+}
+
+simulateStudyABF<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  c(unlist(estimateA(numVariantsBottom + numVariantsTop + 1)[1]), unlist(estimateB(numVariantsBottom + numVariantsTop + 1)[1]), unlist(estimateF(numVariantsBottom + numVariantsTop + 1)[1]))
+  
+}
 
 
 
+plot(log(bps), log(fps), xlab="Method B log p-Value", ylab="Method F log p-Value (10% Tails)", main="p-Value Comparison", col=c("black", "green")[pc])
+abline(v=-2.995, lty="dashed", col="red")
+abline(h=-2.995, lty="dashed", col="red")
+abline(h=-2.303, lty="dashed", col="blue")
+abline(v=-2.303, lty="dashed", col="blue")
 
