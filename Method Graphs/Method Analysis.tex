@@ -63,21 +63,19 @@
 \maketitle
 
 \section{}
-Sorry we didn't get to talk this weekend. I pretty much had what I wanted to do already done by yesterday, but being the holiday, I had a few errands to do after finally finishing moving.
-
-I elected to type up a \LaTeX\ document because it was just easier to insert my figures and special characters and whatnot. I figured a PDF would be easy enough for you to read even if you didn't have time to video chat.
+The methods outlined here aim to detect the effect of an unknown rare protective variant using only control data. Simulations were based on a model of genetic variance with a specified heritability of disease, and fractions of this heritability explained by known common variants, unknown common variants, and unknown rare variants.
 
 \section{}
-I'll quickly outline the methods here and then give the results of what I did. All methods were performed on sets of 500000 simulated individuals, a disease with $h^2 = 0.3$, baseline prevalence 0.1, and 200 common known-effect variants with 2 rare unknown-effect variants. Rare variants were always protective with frequency 0.005 and effect size -1.23. Basically, it's the same as when you were looking at it. Each study only estimates the effect of one of the variants, namely, $\beta_{201}$.
+IAll methods were performed on sets of 500000 simulated individuals, a disease with $h^2 = 0.3$, baseline prevalence 0.1, and 200 common known-effect variants with 2 rare unknown-effect variants. Rare variants were always protective with frequency 0.005 and effect size -1.23 unless otherwise specified here. Each study only estimates the effect of one of the variants, namely, $\beta_{201}$.
 
 \subsection{Method A}
-This one took the cases and controls and assumed we had all of the individuals. It simply compared the prevalence of disease in those with one protective allele to that in those with zero protective alleles. With only the individuals I generated (significantly fewer cases than controls), I took this to be a decent estimate of our best guess on the effect size. The assumption here was that if the method gave an inaccurate estimate, it probably was because we didn't get enough cases or enough individuals with the protective allele or something like that. While less optimal than performing a true case-control study, this gave reasonable results, and was held as the "silver standard" for the rest of my tests.
+This method takes cases and controls and assumes we have information on all of the individuals. It simply compares the prevalence of disease in those with one protective allele to that in those with zero protective alleles. With only the individuals I generated (significantly fewer cases than controls), I took this to be a decent estimate of our best guess on the effect size. The assumption here was that if the method gave an inaccurate estimate, it probably was because we didn't get enough cases or enough individuals with the protective allele or something like that. While less optimal than performing a true case-control study, this gave reasonable results, and was held as the "silver standard" for the rest of my tests (that is, the best way to fake a real analysis).
 
 \subsection{Method B}
-Here, we select out the healthy individuals (as we assume we only have controls). Then we do a linear fit of $\widehat{PRS}$ to genotype. As we discussed, the slope is the negative of $\hat{\beta}_{201}$.
+Here, we select out the healthy individuals (as we assume we only have controls). Then we do a linear fit of $\widehat{PRS}$ to genotype. Here, the slope should be the negative of $\hat{\beta}_{201}$.
 
 \subsection{Method C}
-Was an attempt to do something similar to Method B with cases rather than controls, but I abandoned this idea and just stuck with all control-based tests. No results from this method.
+This method was an attempt to do something similar to Method B with cases rather than controls, but I abandoned this idea and just stuck with all control-based tests. No results from this method.
 
 \subsection{Method D}
 Essentially, this is a pseudo-case-control study on the tails of the $\widehat{PRS}$ distribution of the healthy individuals. Take the top and bottom tails (tail size can be altered, but commonly 10\%), and compare the "prevalence" of disease in those with zero, one, and two allele genotypes for our rare variant. If no individuals in the tails have genotype 2, we discard the result, as two points cannot give us a p-value, so the estimate is not meaningful. Then, translate the prevalences into risk scores, and do a linear fit on the scores vs genotypes. If the prevalence in those with genotype $G_{201} = 2$ is 0 or 1, the score for that point is $\pm \infty$, so the linear fit will make no sense, and the estimate is not meaningful.
@@ -91,7 +89,7 @@ Perform Method B, but rather than fitting the entire $\widehat{PRS}$ distributio
 Perform Method D, but instead of using three equally weighted points, weight each genotype point by the number of individuals (in the tails) with that genotype. Now, for example, a prevalence estimate from one person with $G_{201}=2$ should count for less than a prevalence estimate from 15000 people with $G_{201}=0$.
 
 \section{}
-I did a lot of playing with things and tweaking parameters, so I'll try to just give you the rundown on how the methods compare, and what I think the best choices are.
+I did a lot of playing with things and tweaking parameters, so this is just a rundown on how the methods compare, and what I think the best choices are.
 
 \subsection{B-E Comparison}
 Obviously we need to do a comparison of these two, since E is a variation on B.
@@ -152,6 +150,22 @@ This is F vs A. Fewer points because a lot of them got rejected, but still the s
 
 \section{}
 
-Ultimately, I chose not to consider the method where we simulate cases and controls by coin-flipping from $\widehat{PRS}$ because every individual has such a similar estimated score that it wouldn't give a detectable effect unless we had an obscene number of individuals.
+Ultimately, I chose not to consider the method where we simulate cases and controls by coin-flipping from $\widehat{PRS}$ because every individual has such a similar estimated score that I expect it wouldn't give a detectable effect unless we had an obscene number of individuals.
+
+FInally, it looks like Method B is the easiest and most consistent way to predict sign. Method F gives a better order of magnitude estimate, but because it's pretty linear with respect to B, it doesn't really give any additional information. If we could figure out what was going on with the p-values in B, maybe we could find a way to get a more accurate magnitude of estimate, but as I mentioned, I tried and it's hard.
+
+I want to try estimating multiple effects at once. My plan for this is to use Method B, but instead of regressing on just one genotype variable, regress on many. This should reduce effects from covariance in genotypes.
+
+\section{}
+
+Taking the analysis a step further, I tested Method B's response to changing the heritability explained by altering the frequency and effect sizes of the rare variants. Here, recorded effect size estimates and p-values as changes were made in both of these directions.
+
+\includegraphics[scale=0.5]{Understanding B/Constant MAF.pdf}
+
+Here, I hold the allele frequency of the rare variants constant, and alter their effect sizes.
+
+\includegraphics[scale=0.5]{Understanding B/Constant Beta.pdf}
+
+Here, I hold the effect sizes constant, and alter the frequencies.
 
 \end{document}

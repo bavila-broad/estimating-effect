@@ -9,14 +9,12 @@ lmp <- function (modelobject) {
 
 # initialize study variables
 heritability = 0.3
-heritabilityTopProp = .9
+heritabilityTopProp = 0.7
 heritabilityBottomProp = 0
 heritabilityRareProp = 1 - heritabilityTopProp - heritabilityBottomProp
 numVariantsTop = 200
 numVariantsBottom = 0
 numVariantsRare = 2
-numStrongProtVariants = 5
-numStrongRiskVariants = 5
 baselinePrevalence = 0.1
 
 numIndividuals = 500000
@@ -46,11 +44,13 @@ baselineScore = psi(baselinePrevalence)
 
 assignVariantFrequencies<-function(){
   # variant frequencies top 
-  variantFrequenciestop<<-rbeta(numVariantsTop, 1.5, 1.5)
+  variantFrequenciestop<<-rbeta(numVariantsTop, 1.5, 8.5)
   # variant frequencies bottom 
-  variantFrequenciesbottom<<-rbeta(numVariantsBottom, 1.5, 1.5)
+  variantFrequenciesbottom<<-rbeta(numVariantsBottom, 1.5, 8.5)
   # variant frequencies rare
-  variantFrequenciesrare<<-c(.005,.005)
+  #variantFrequenciesrare<<-c(.005,.005)
+  myVariances = heritabilityRareProp*heritability / numVariantsRare
+  variantFrequenciesrare<<-rep((1 - sqrt(1-2*myVariances/4)) / 2, 2)
   
 }
 
@@ -105,6 +105,29 @@ createIndividuals<-function(){
   individualPhenotypes<<-rbinom(numIndividuals, 1, phi(individualScores))
   
 }
+createIndividualsBX<-function(){
+  # generate genotypes
+  individualGenotypes<<-replicate(numIndividuals, generateGenotype())
+  
+  # lets add some correlation for 2 rare variants
+  # MAKE THIS MORE GENERALIZED
+  for(i in 1:numIndividuals){
+    if(individualGenotypes[201,i] > 0 & individualGenotypes[202,i] < 2){
+      individualGenotypes[202, i]<<-individualGenotypes[202, i] + 1
+      
+    }
+    
+  }
+  
+  # generate our riskScores
+  individualScores<<-apply(individualGenotypes, 2, riskScore)
+  individualPRSs<<-individualScores - baselineScore
+  
+  # generate phenotypes
+  individualPhenotypes<<-rbinom(numIndividuals, 1, phi(individualScores))
+  
+}
+
 
 # how to estimate PRS of genotype
 estimatePRS<-function(genotype){
@@ -537,11 +560,98 @@ simulateStudyABF<-function(){
   
 }
 
+simulatePRSMean<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividuals()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  mean(individualPRSs)
+  
+}
+
+# plotVaryingBeta<-function(){
+#   allp = c(unlist(info.h0[3,]), unlist(info.h10[3,]), unlist(info.h25[3,]), unlist(info.h50[3,]), unlist(info.h75[3,]), unlist(info.h90[3,]), unlist(info.h100[3,]))
+#   allb = c(unlist(info.h0[1,]), unlist(info.h10[1,]), unlist(info.h25[1,]), unlist(info.h50[1,]), unlist(info.h75[1,]), unlist(info.h90[1,]), unlist(info.h100[1,]))
+#   plot(log(allp), allb, col=allcolors, xlab="log p-Value", ylab="Beta Estimate", main="p-Beta Comparison for Heritability Explained (MAF = 0.005)", sub="Fraction Explained = 0%, 10%, 25%, 50%, 75%, 90%, 100%")
+#   legend(-17, 0.02, c("0%", "10%", "25%", "50%", "75%", "90%", "100%"), lty=c(1, 1, 1, 1, 1, 1, 1), lwd=c(2, 2, 2, 2, 2, 2, 2), col=c("red", "orange", "yellow", "green", "blue", "purple", "pink"))
+#   allcolors = c(rep("red", 100), rep("orange", 100), rep("yellow", 100), rep("green", 100), rep("blue", 100), rep("purple", 100), rep("pink", 100))
+# 
+# }
+# 
+# plotVaryingMAF<-function(){
+#   allp = c(unlist(infob.h10[3,]), unlist(infob.h25[3,]), unlist(infob.h50[3,]), unlist(infob.h75[3,]), unlist(infob.h90[3,]), unlist(infob.h100[3,]))
+#   allb = c(unlist(infob.h10[1,]), unlist(infob.h25[1,]), unlist(infob.h50[1,]), unlist(infob.h75[1,]), unlist(infob.h90[1,]), unlist(infob.h100[1,]))
+#   allcolors = c(rep("orange", 100), rep("yellow", 100), rep("green", 100), rep("blue", 100), rep("purple", 100), rep("pink", 100))
+#   plot(log(allp), allb, col=allcolors, xlab="log p-Value", ylab="Beta Estimate", main="p-Beta Comparison for Heritability Explained (Beta = -2)", sub="Fraction Explained = 10%, 25%, 50%, 75%, 90%, 100%")
+#   legend(-24, 0.005, c("10%", "25%", "50%", "75%", "90%", "100%"), lty=c(1, 1, 1, 1, 1, 1), lwd=c(2, 2, 2, 2, 2, 2), col=c("orange", "yellow", "green", "blue", "purple", "pink"))
+# 
+# }
+
+# *************** Method BX ***************
+
+# Method B on multiple variants
 
 
-plot(log(bps), log(fps), xlab="Method B log p-Value", ylab="Method F log p-Value (10% Tails)", main="p-Value Comparison", col=c("black", "green")[pc])
-abline(v=-2.995, lty="dashed", col="red")
-abline(h=-2.995, lty="dashed", col="red")
-abline(h=-2.303, lty="dashed", col="blue")
-abline(v=-2.303, lty="dashed", col="blue")
+# how to estimate a beta
+estimateBX<-function(loci){
+  
+  # select out healthy inds
+  healthy<<-which(individualPhenotypes == 0)
+  
+  # aggregate data
+  myData = data.frame(t(rbind(individualPRSEstimates[healthy], individualGenotypes[loci, healthy])))
+  fit <- lm(myData[,1] ~ ., data=myData[,-1])
+  return(cbind(-summary(fit)$coefficients[2:(length(loci) + 1), "Estimate"], summary(fit)$coefficients[2:(length(loci) + 1), "Pr(>|t|)"]))
+  #print(PRSZero - PRSOne)
+  
+}
 
+simulateStudyBX<-function(){
+  studynumber<<-studynumber + 1
+  print(cat("Beginning Study ", studynumber))
+  print("Assigning betas...")
+  assignVariantFrequencies()
+  assignVariantBetaVariances()
+  assignVariantBetas()
+  
+  print("Creating individuals...")
+  createIndividualsBX()
+  createPRSEstimates()
+  
+  print("Estimating...")
+  myLoci = numVariantsTop + numVariantsBottom + 1:numVariantsRare
+  myEstimates = matrix(estimateBX(myLoci), nrow=2)
+  bEstimates = matrix(unlist(sapply(myLoci, estimateB)), nrow=3)[c(1, 3),]
+  rbind(t(myEstimates), bEstimates)
+  # returns a matrix:
+  # first row is betas from BX
+  # second row ps from BX
+  # third row betas fom B
+  # fourth row ps from B
+  
+}
+
+plotBXBetas<-function(){
+  plot(rep(1:10, 4), c(bxinfo[1,1,1:10], bxinfo[1,2,1:10], bxinfo[3,1,1:10], bxinfo[3,2,1:10]), col=c(rep("red", 20), rep("green", 20)))
+  
+}
+
+plotBXPs<-function(){
+  plot(rep(1:10, 4), c(bxinfo[2,1,1:10], bxinfo[2,2,1:10], bxinfo[4,1,1:10], bxinfo[4,2,1:10]), col=c(rep("red", 20), rep("green", 20)))
+  
+  
+}
+
+plotBXlogPs<-function(){
+  plot(rep(1:10, 4), log(c(bxinfo[2,1,1:10], bxinfo[2,2,1:10], bxinfo[4,1,1:10], bxinfo[4,2,1:10])), col=c(rep("red", 20), rep("green", 20)))
+  
+  
+}
